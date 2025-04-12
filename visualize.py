@@ -1,5 +1,5 @@
 """
-FetchReach-v1 Environment Visualization with Soft Actor-Critic (SAC)
+FetchReach-v1 Environment Visualization with Multiple Reinforcement Learning Algorithms
 ME5406 Project
 """
 
@@ -11,8 +11,9 @@ import matplotlib.pyplot as plt
 import cv2
 import seaborn as sns
 from tianshou.utils.net.common import Net
-from tianshou.utils.net.continuous import ActorProb, Critic
-from tianshou.policy import SACPolicy
+from tianshou.utils.net.continuous import ActorProb, Critic, Actor
+from tianshou.policy import SACPolicy, PPOPolicy, TD3Policy, DDPGPolicy
+from tianshou.exploration import GaussianNoise
 import gymnasium as gym
 import gymnasium_robotics
 from gymnasium.wrappers import FilterObservation, FlattenObservation
@@ -472,50 +473,23 @@ def main(args):
     env.reset(seed=seed)
 
     # Get environment information
-    state_shape = env.observation_space.shape or env.observation_space.n
-    action_shape = env.action_space.shape or env.action_space.n
-    max_action = env.action_space.high[0]
-
     print(f"Observation space: {env.observation_space}")
     print(f"Action space: {env.action_space}")
+    print(f"Action shape: {env.action_space.shape}")
 
-    # Create network structure
-    # Actor
-    net_a = Net(state_shape, hidden_sizes=[128, 128], device=device)
-    actor = ActorProb(net_a, action_shape, max_action=max_action, device=device, unbounded=True).to(device)
-    actor_optim = torch.optim.Adam(actor.parameters(), lr=1e-3)
-
-    # Critics
-    net_c1 = Net(state_shape, action_shape, hidden_sizes=[128, 128], concat=True, device=device)
-    critic1 = Critic(net_c1, device=device).to(device)
-    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=1e-3)
-
-    net_c2 = Net(state_shape, action_shape, hidden_sizes=[128, 128], concat=True, device=device)
-    critic2 = Critic(net_c2, device=device).to(device)
-    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=1e-3)
-
-    # Alpha
-    target_entropy = -np.prod(env.action_space.shape)
-    log_alpha = torch.zeros(1, requires_grad=True, device=device)
-    alpha_optim = torch.optim.Adam([log_alpha], lr=1e-4)
-    alpha = (target_entropy, log_alpha, alpha_optim)
-
-    # Create policy
-    policy = SACPolicy(
-        actor=actor,
-        actor_optim=actor_optim,
-        critic1=critic1,
-        critic1_optim=critic1_optim,
-        critic2=critic2,
-        critic2_optim=critic2_optim,
-        exploration_noise=None,
-        estimation_step=1,
-        action_space=env.action_space,
-        alpha=alpha
-    )
+    # Create policy based on algorithm
+    if args.algorithm == 'SAC':
+        policy, actor = create_sac_policy(env, device)
+    elif args.algorithm == 'PPO':
+        policy, actor = create_ppo_policy(env, device)
+    elif args.algorithm == 'TD3':
+        policy, actor = create_td3_policy(env, device)
+    elif args.algorithm == 'DDPG':
+        policy, actor = create_ddpg_policy(env, device)
+    else:
+        raise ValueError(f"Unsupported algorithm: {args.algorithm}")
 
     # Load model parameters
-    model_path = args.model_file  # Use the full path directly
     checkpoint = torch.load(model_path, map_location=device)
     print(f"Model loaded from {model_path}")
     print(f"Model keys: {checkpoint.keys()}")
@@ -537,13 +511,13 @@ def main(args):
     plot_reward_distribution(episode_rewards, viz_dir)
 
     # 4. Plot action distribution
-    plot_action_distribution(actions, action_shape, viz_dir)
+    plot_action_distribution(actions, env.action_space.shape, viz_dir)
 
     # 5. Plot state space visualization
     plot_state_space(observations, viz_dir)
 
     # 6. Plot reward-action relationship
-    plot_reward_action_relationship(actions, rewards, action_shape, viz_dir)
+    plot_reward_action_relationship(actions, rewards, env.action_space.shape, viz_dir)
 
     # 7. Plot success rate statistics
     plot_success_rate(success_rate, viz_dir)
@@ -554,8 +528,165 @@ def main(args):
     print(f"\nAll visualization results have been saved to {viz_dir}")
     print(f"Please open {os.path.join(viz_dir, 'index.html')} to view the complete results")
 
+def create_sac_policy(env, device):
+    """Create a SAC policy"""
+    state_shape = env.observation_space.shape or env.observation_space.n
+    action_shape = env.action_space.shape or env.action_space.n
+    max_action = env.action_space.high[0]
+
+    # Actor
+    net_a = Net(state_shape, hidden_sizes=[128, 128], device=device)
+    actor = ActorProb(net_a, action_shape, max_action=max_action, device=device, unbounded=True).to(device)
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=1e-3)
+
+    # Critics
+    net_c1 = Net(state_shape, action_shape, hidden_sizes=[128, 128], concat=True, device=device)
+    critic1 = Critic(net_c1, device=device).to(device)
+    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=1e-3)
+
+    net_c2 = Net(state_shape, action_shape, hidden_sizes=[128, 128], concat=True, device=device)
+    critic2 = Critic(net_c2, device=device).to(device)
+    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=1e-3)
+
+    # Alpha
+    target_entropy = -np.prod(env.action_space.shape)
+    log_alpha = torch.zeros(1, requires_grad=True, device=device)
+    alpha_optim = torch.optim.Adam([log_alpha], lr=1e-4)
+    alpha = (target_entropy, log_alpha, alpha_optim)
+
+    policy = SACPolicy(
+        actor=actor,
+        actor_optim=actor_optim,
+        critic1=critic1,
+        critic1_optim=critic1_optim,
+        critic2=critic2,
+        critic2_optim=critic2_optim,
+        exploration_noise=None,
+        estimation_step=1,
+        action_space=env.action_space,
+        alpha=alpha
+    )
+
+    return policy, actor
+
+def create_ppo_policy(env, device):
+    """Create a PPO policy"""
+    state_shape = env.observation_space.shape or env.observation_space.n
+    action_shape = env.action_space.shape or env.action_space.n
+    max_action = env.action_space.high[0]
+
+    # Actor
+    net_a = Net(state_shape, hidden_sizes=[128, 128], device=device)
+    actor = ActorProb(net_a, action_shape, max_action=max_action, device=device, unbounded=True).to(device)
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=1e-3)
+
+    # Critic
+    net_c = Net(state_shape, hidden_sizes=[128, 128], device=device)
+    critic = Critic(net_c, device=device).to(device)
+    critic_optim = torch.optim.Adam(critic.parameters(), lr=1e-3)
+
+    # Create PPO policy
+    dist = torch.distributions.Normal
+    policy = PPOPolicy(
+        actor=actor,
+        critic=critic,
+        optim=actor_optim,
+        dist_fn=dist,
+        action_space=env.action_space,
+        discount_factor=0.99,
+        max_grad_norm=0.5,
+        eps_clip=0.2,
+        vf_coef=0.5,
+        ent_coef=0.01,
+        gae_lambda=0.95,
+        reward_normalization=True,
+        dual_clip=None,
+        value_clip=True,
+        deterministic_eval=True,
+        advantage_normalization=True,
+        recompute_advantage=False
+    )
+
+    return policy, actor
+
+def create_td3_policy(env, device):
+    """Create a TD3 policy"""
+    state_shape = env.observation_space.shape or env.observation_space.n
+    action_shape = env.action_space.shape or env.action_space.n
+    max_action = env.action_space.high[0]
+
+    # Actor
+    net_a = Net(state_shape, hidden_sizes=[128, 128], device=device)
+    actor = Actor(net_a, action_shape, max_action=max_action, device=device).to(device)
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=1e-3)
+
+    # Critics
+    net_c1 = Net(state_shape, action_shape, hidden_sizes=[128, 128], concat=True, device=device)
+    critic1 = Critic(net_c1, device=device).to(device)
+    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=1e-3)
+
+    net_c2 = Net(state_shape, action_shape, hidden_sizes=[128, 128], concat=True, device=device)
+    critic2 = Critic(net_c2, device=device).to(device)
+    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=1e-3)
+
+    # Noise
+    exploration_noise = GaussianNoise(sigma=0.1)
+    policy_noise = 0.2
+    noise_clip = 0.5
+    update_actor_freq = 2
+
+    policy = TD3Policy(
+        actor=actor,
+        actor_optim=actor_optim,
+        critic1=critic1,
+        critic1_optim=critic1_optim,
+        critic2=critic2,
+        critic2_optim=critic2_optim,
+        exploration_noise=exploration_noise,
+        policy_noise=policy_noise,
+        noise_clip=noise_clip,
+        update_actor_freq=update_actor_freq,
+        estimation_step=1,
+        action_space=env.action_space
+    )
+
+    return policy, actor
+
+def create_ddpg_policy(env, device):
+    """Create a DDPG policy"""
+    state_shape = env.observation_space.shape or env.observation_space.n
+    action_shape = env.action_space.shape or env.action_space.n
+    max_action = env.action_space.high[0]
+
+    # Actor
+    net_a = Net(state_shape, hidden_sizes=[128, 128], device=device)
+    actor = Actor(net_a, action_shape, max_action=max_action, device=device).to(device)
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=1e-3)
+
+    # Critic
+    net_c = Net(state_shape, action_shape, hidden_sizes=[128, 128], concat=True, device=device)
+    critic = Critic(net_c, device=device).to(device)
+    critic_optim = torch.optim.Adam(critic.parameters(), lr=1e-3)
+
+    # Noise
+    exploration_noise = GaussianNoise(sigma=0.1)
+
+    policy = DDPGPolicy(
+        actor=actor,
+        actor_optim=actor_optim,
+        critic=critic,
+        critic_optim=critic_optim,
+        exploration_noise=exploration_noise,
+        estimation_step=1,
+        action_space=env.action_space
+    )
+
+    return policy, actor
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Visualize a trained SAC agent on FetchReach environment")
+    parser = argparse.ArgumentParser(description="Visualize a trained agent on FetchReach environment")
+    parser.add_argument("--algorithm", type=str, default="SAC", choices=["SAC", "PPO", "TD3", "DDPG"],
+                        help="RL algorithm to use")
     parser.add_argument("--log_dir", type=str, default="logs/Tianshou_SAC_12_Apr_2025_14_23_57/",
                         help="Directory containing the trained model")
     parser.add_argument("--model_file", type=str, default="logs/Tianshou_SAC_12_Apr_2025_22_55_02/Tianshou_SAC_epoch1.pth",
