@@ -38,18 +38,32 @@ def run_command(command, description):
 def main(args):
     # Create logs directory if it doesn't exist
     os.makedirs("logs", exist_ok=True)
-    
+
     algorithm = args.algorithm
-    
+
     # Step 1: Training
     if args.train:
         command = f"python train.py --algorithm {algorithm} --device {args.device} --seed {args.seed}"
+
+        # Add max_epoch parameter if provided
+        if args.max_epoch is not None:
+            command += f" --max_epoch {args.max_epoch}"
+
+        # Add step_per_epoch parameter if provided
+        if args.step_per_epoch is not None:
+            command += f" --step_per_epoch {args.step_per_epoch}"
+        # If not provided, use recommended values based on algorithm
+        elif algorithm == 'SAC':
+            command += f" --step_per_epoch 100000"
+        elif algorithm in ['PPO', 'TD3', 'DDPG']:
+            command += f" --step_per_epoch 250000"
+
         success = run_command(command, f"Training {algorithm} algorithm")
-        
+
         if not success:
             print(f"Training {algorithm} failed. Exiting.")
             return
-    
+
     # Find the most recent log directory for this algorithm if not specified
     if args.log_dir:
         log_dir = args.log_dir
@@ -59,35 +73,35 @@ def main(args):
             print(f"No log directories found for {algorithm}. Please train the model first or specify a log directory.")
             return
         log_dir = os.path.join("logs", log_dirs[0])
-    
+
     # Find the model file if not specified
     if args.model_file:
         model_file = args.model_file
     else:
         model_file = os.path.join(log_dir, f"Tianshou_{algorithm}_epoch1.pth")
-    
+
     if not os.path.exists(model_file):
         print(f"Model file not found: {model_file}. Please train the model first or specify a valid model file.")
         return
-    
+
     # Step 2: Testing
     if args.test:
         command = f"python test.py --algorithm {algorithm} --log_dir {log_dir} --model_file {model_file} --device {args.device} --num_episodes {args.num_episodes}"
         success = run_command(command, f"Testing {algorithm} algorithm")
-        
+
         if not success:
             print(f"Testing {algorithm} failed. Skipping visualization.")
             return
-    
+
     # Step 3: Visualization
     if args.visualize:
         command = f"python visualize.py --algorithm {algorithm} --log_dir {log_dir} --model_file {model_file} --device {args.device} --num_videos {args.num_videos} --num_episodes {args.num_episodes}"
         success = run_command(command, f"Visualizing {algorithm} algorithm")
-        
+
         if not success:
             print(f"Visualizing {algorithm} failed.")
             return
-    
+
     print(f"\nAll processing for {algorithm} completed!")
     print(f"Results can be found in: {log_dir}")
 
@@ -113,6 +127,10 @@ if __name__ == "__main__":
                         help="Whether to test the model")
     parser.add_argument("--visualize", action="store_true", default=True,
                         help="Whether to visualize the model")
-    
+    parser.add_argument("--max_epoch", type=int, default=None,
+                        help="Maximum number of epochs to train (default: 1)")
+    parser.add_argument("--step_per_epoch", type=int, default=None,
+                        help="Number of steps per epoch (default: varies by algorithm)")
+
     args = parser.parse_args()
     main(args)

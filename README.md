@@ -17,8 +17,7 @@ This project implements multiple reinforcement learning algorithms for the Fetch
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/fetchreach-rl.git
-cd fetchreach-rl
+git clone https://github.com/GoFuuu/ME5406.git
 ```
 
 2. Create a conda environment and install dependencies:
@@ -40,8 +39,13 @@ python train.py --algorithm SAC  # Options: SAC, PPO, TD3, DDPG
 
 Additional training options:
 ```bash
-python train.py --algorithm PPO --device cuda --seed 42
+python train.py --algorithm PPO --device cuda --seed 42 --step_per_epoch 80000
 ```
+
+You can customize the training process with these parameters:
+- `--max_epoch`: Maximum number of epochs to train (default: 1)
+- `--step_per_epoch`: Number of steps per epoch (default: 80000)
+  - For better convergence, we recommend using 80000 for SAC and 150000 for PPO, TD3, and DDPG
 
 This will:
 - Create a new log directory with a timestamp and algorithm name
@@ -115,6 +119,19 @@ After training, the agent learns to efficiently move the robotic arm to the targ
 2. **Success Rate**: The percentage of episodes where the agent successfully reaches the target
 3. **Visualization**: Videos showing the agent's behavior and various plots analyzing its performance
 
+### Training Parameters for Optimal Convergence
+
+Different algorithms require different training parameters to achieve optimal convergence:
+
+| Algorithm | Recommended Episode | Epoch| Notes |
+|-----------|------------------------------|-------|-------|
+| SAC       | 60,000                      |1| Converges relatively quickly |
+| PPO       | 80,000                      |50| Hard to converge |
+| TD3       | 150,000+                      |1| Needs more steps for stable critic learning |
+| DDPG      | 150,000                      | 1|Requires more steps for exploration |
+
+These parameters have been tuned to ensure good learning curve convergence while maintaining reasonable training times.
+
 ## Running Multiple Algorithms
 
 This project includes scripts to easily train, test, and visualize multiple algorithms:
@@ -134,7 +151,9 @@ Optional arguments:
 - `--num_videos`: Number of videos to generate during visualization (default: 5)
 
 This script will:
-1. Train each algorithm sequentially
+1. Train each algorithm sequentially with optimized parameters:
+   - SAC: 100,000 steps per epoch
+   - PPO, TD3, DDPG: 150,000 steps per epoch
 2. Test each trained algorithm
 3. Generate visualizations for each algorithm
 4. Compare all successfully trained algorithms
@@ -158,6 +177,11 @@ Optional arguments:
 - `--visualize`: Whether to visualize the model (default: True)
 - `--log_dir`: Directory containing the trained model (optional)
 - `--model_file`: Full path to the trained model file (optional)
+
+Example with increased training steps:
+```bash
+python run_single_algorithm.py --algorithm TD3 --step_per_epoch 150000
+```
 
 ### Comparing Different Methods
 
