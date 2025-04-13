@@ -249,7 +249,7 @@ def create_ddpg_policy(env, device, model_hyperparameters):
 
     return policy, actor, actor_optim, critic, critic_optim
 
-def train_agent(algorithm, env_id, seed, device, load_pretrained_model=False, model_log_dir='', model_file='', buffer_file=''):
+def train_agent(algorithm, env_id, seed, device, load_pretrained_model=False, model_log_dir='', model_file='', buffer_file='', max_epoch=None, step_per_epoch=None):
     """Train an agent using the specified algorithm"""
     start = time.perf_counter()
     np.random.seed(seed)
@@ -345,8 +345,8 @@ def train_agent(algorithm, env_id, seed, device, load_pretrained_model=False, mo
     # Training hyperparameters
     if algorithm == 'PPO':
         trainer_hyperparameters = {
-            'max_epoch': 1,
-            'step_per_epoch': 80_000,
+            'max_epoch': 5 if max_epoch is None else max_epoch,
+            'step_per_epoch': 80_000 if step_per_epoch is None else step_per_epoch,
             'step_per_collect': 2000,
             'repeat_per_collect': 10,
             'episode_per_test': 1,
@@ -354,8 +354,8 @@ def train_agent(algorithm, env_id, seed, device, load_pretrained_model=False, mo
         }
     else:  # For off-policy algorithms (SAC, TD3, DDPG)
         trainer_hyperparameters = {
-            'max_epoch': 1,
-            'step_per_epoch': 80_000,
+            'max_epoch': 1 if max_epoch is None else max_epoch,
+            'step_per_epoch': 150_000 if step_per_epoch is None else step_per_epoch,
             'step_per_collect': 10,
             'episode_per_test': 1,
             'batch_size': 64
@@ -438,6 +438,10 @@ if __name__ == '__main__':
                         help="Filename of the pretrained model")
     parser.add_argument("--buffer_file", type=str, default="",
                         help="Filename of the replay buffer")
+    parser.add_argument("--max_epoch", type=int, default=None,
+                        help="Maximum number of epochs to train (default: 1)")
+    parser.add_argument("--step_per_epoch", type=int, default=None,
+                        help="Number of steps per epoch (default: 80000)")
 
     args = parser.parse_args()
 
@@ -451,5 +455,7 @@ if __name__ == '__main__':
         load_pretrained_model=args.load_pretrained,
         model_log_dir=args.model_dir,
         model_file=args.model_file,
-        buffer_file=args.buffer_file
+        buffer_file=args.buffer_file,
+        max_epoch=args.max_epoch,
+        step_per_epoch=args.step_per_epoch
     )
