@@ -123,7 +123,7 @@ After training, the agent learns to efficiently move the robotic arm to the targ
 
 Different algorithms require different training parameters to achieve optimal convergence:
 
-| Algorithm | Recommended Episode | Epoch| Notes |
+| Algorithm | Recommended step_per_epoch | Epoch| Notes |
 |-----------|------------------------------|-------|-------|
 | SAC       | 60,000                      |1| Converges relatively quickly |
 | PPO       | 80,000                      |50| Hard to converge |
