@@ -1,6 +1,6 @@
 # FetchReach Reinforcement Learning Project
 
-This project implements multiple reinforcement learning algorithms for the FetchReach-v1 environment from Gymnasium Robotics. The agents learn to control a robotic arm to reach a target position in 3D space. The implemented algorithms include Soft Actor-Critic (SAC), Proximal Policy Optimization (PPO), Twin Delayed DDPG (TD3), and Deep Deterministic Policy Gradient (DDPG).
+This project implements multiple reinforcement learning algorithms for the FetchReach environment from Gymnasium Robotics. The agents learn to control a robotic arm to reach a target position in 3D space. The implemented algorithms include Soft Actor-Critic (SAC), Proximal Policy Optimization (PPO), Twin Delayed DDPG (TD3), and Deep Deterministic Policy Gradient (DDPG).
 
 ## Project Structure
 
