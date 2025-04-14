@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FetchReach SAC Extended Visualizations</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        .section {
+            margin-bottom: 40px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        @media (max-width: 992px) {
+            .video-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 576px) {
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        img {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        video {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .stats {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .highlight {
+            color: #2c7be5;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>FetchReach SAC Extended Visualizations</h1>
+
+    <div class="section">
+        <h2>Overview</h2>
+        <p>This page presents extended visualizations of the SAC algorithm in the FetchReach-v1 environment.</p>
+
+        <div class="stats">
+            <h3>Performance Statistics</h3>
+            <p><span class="highlight">Average Reward:</span> -2.0000</p>
+            <p><span class="highlight">Reward Range:</span> [-3.0000, 0.0000]</p>
+            <p><span class="highlight">Success Rate:</span> 100.00%</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Video Samples</h2>
+        <p>Here are 10 video samples of the trained agent performing the task:</p>
+
+        <div class="video-grid">
+
+            <div>
+                <h3>Sample 1</h3>
+                <video controls>
+                    <source src="more_videos/episode_1.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -3.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 2</h3>
+                <video controls>
+                    <source src="more_videos/episode_2.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: 0.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 3</h3>
+                <video controls>
+                    <source src="more_videos/episode_3.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -3.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 4</h3>
+                <video controls>
+                    <source src="more_videos/episode_4.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -2.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 5</h3>
+                <video controls>
+                    <source src="more_videos/episode_5.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -2.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 6</h3>
+                <video controls>
+                    <source src="more_videos/episode_6.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -2.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 7</h3>
+                <video controls>
+                    <source src="more_videos/episode_7.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -1.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 8</h3>
+                <video controls>
+                    <source src="more_videos/episode_8.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -3.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 9</h3>
+                <video controls>
+                    <source src="more_videos/episode_9.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -3.0000</p>
+            </div>
+
+            <div>
+                <h3>Sample 10</h3>
+                <video controls>
+                    <source src="more_videos/episode_10.mp4" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <p>Reward: -1.0000</p>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Distribution Visualizations</h2>
+
+        <div class="grid">
+            <div>
+                <h3>Reward Distribution</h3>
+                <img src="reward_distribution.png" alt="Reward Distribution">
+                <p>This plot shows the distribution of total rewards obtained over multiple runs.</p>
+            </div>
+            <div>
+                <h3>Action Distribution</h3>
+                <img src="action_distribution.png" alt="Action Distribution">
+                <p>This plot shows the distribution of actions taken by the agent across each action dimension.</p>
+            </div>
+            <div>
+                <h3>Action Correlation</h3>
+                <img src="action_correlation.png" alt="Action Correlation">
+                <p>This heatmap shows the correlation between different action dimensions.</p>
+            </div>
+            <div>
+                <h3>Reward-Action Relationship</h3>
+                <img src="reward_action_relationship.png" alt="Reward-Action Relationship">
+                <p>This plot shows the relationship between each action dimension and the resulting reward.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>State Space Visualization</h2>
+
+        <div class="grid">
+            <div>
+                <h3>PCA Dimensionality Reduction</h3>
+                <img src="state_space_pca.png" alt="State Space PCA Visualization">
+                <p>Using Principal Component Analysis (PCA) to reduce the high-dimensional state space to 2D for visualization.</p>
+            </div>
+            <div>
+                <h3>t-SNE Dimensionality Reduction</h3>
+                <img src="state_space_tsne.png" alt="State Space t-SNE Visualization">
+                <p>Using t-SNE algorithm to reduce the high-dimensional state space to 2D for visualization, better preserving local structure.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Success Rate Statistics</h2>
+        <img src="success_rate.png" alt="Success Rate Statistics">
+        <p>This plot shows the success rate of the agent in completing the task.</p>
+    </div>
+
+    <footer>
+        <p>Generated on {time.strftime('%Y-%m-%d')}</p>
+    </footer>
+</body>
+</html>
