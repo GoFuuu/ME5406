@@ -125,9 +125,9 @@ Different algorithms require different training parameters to achieve optimal co
 
 | Algorithm | Recommended step_per_epoch | Epoch| Notes |
 |-----------|------------------------------|-------|-------|
-| SAC       | 60,000                      |1| Converges relatively quickly |
-| PPO       | 80,000                      |50| Hard to converge |
-| TD3       | 150,000+                      |1| Needs more steps for stable critic learning |
+| SAC       | 50,000                      |1| Converges relatively quickly |
+| PPO       | \                      | \ | Hard to converge |
+| TD3       | 150,000                      |1| Needs more steps for stable critic learning |
 | DDPG      | 150,000                      | 1|Requires more steps for exploration |
 
 These parameters have been tuned to ensure good learning curve convergence while maintaining reasonable training times.
@@ -207,9 +207,10 @@ All comparison visualizations are saved to the `logs/comparisons/` directory.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License 
 
 ## Acknowledgments
 
 - This project uses the [Tianshou](https://github.com/thu-ml/tianshou) reinforcement learning library
 - The environment is provided by [Gymnasium Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics)
+- This project is based on the [OpenAI-Gym-Projects](https://github.com/NickKaparinos/OpenAI-Gym-Projects) 
