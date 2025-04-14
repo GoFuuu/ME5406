@@ -22,17 +22,43 @@ from sklearn.manifold import TSNE
 from tqdm import tqdm
 import argparse
 
-def generate_more_videos(env, actor, num_episodes=10, fps=30, resolution_scale=2, viz_dir=None, device='cpu'):
-    """Generate multiple video samples of the trained agent"""
+def generate_more_videos(env, actor, num_episodes=10, fps=30, resolution_scale=2, viz_dir=None, device='cpu', max_steps=50, success_threshold=-10):
+    """
+    Generate multiple video samples of the trained agent's performance.
+
+    This function runs the trained agent in the environment for multiple episodes,
+    records videos of the agent's behavior, and calculates performance metrics.
+
+    Args:
+        env (gym.Env): The environment to run the agent in (must support render() method)
+        actor (torch.nn.Module): The trained actor network that outputs actions
+        num_episodes (int): Number of episodes to record
+        fps (int): Frames per second for the output videos
+        resolution_scale (int): Factor by which to scale the rendered frames
+        viz_dir (str): Directory to save visualization results
+        device (str): Device to run the model on ('cpu' or 'cuda')
+        max_steps (int): Maximum number of steps per episode
+        success_threshold (float): Reward threshold above which an episode is considered successful
+
+    Returns:
+        tuple: (total_rewards, success_rate)
+            - total_rewards (list): List of total rewards for each episode
+            - success_rate (float): Percentage of successful episodes
+    """
+    # Create directory for videos if it doesn't exist
     print("\n=== Generating More Video Samples ===")
     video_dir = os.path.join(viz_dir, "more_videos")
     os.makedirs(video_dir, exist_ok=True)
 
+    # Initialize metrics tracking
     total_rewards = []
     success_count = 0
 
+    # Process each episode
     for episode in range(num_episodes):
         print(f"Generating video {episode+1}/{num_episodes}")
+
+        # Reset environment
         obs, _ = env.reset()
         done = False
         truncated = False
@@ -40,85 +66,131 @@ def generate_more_videos(env, actor, num_episodes=10, fps=30, resolution_scale=2
         frames = []
         step = 0
 
-        # Record trajectory
+        # Record trajectory for potential further analysis
         trajectory = []
 
-        while not (done or truncated) and step < 50:
-            # Get action
+        # Run episode
+        while not (done or truncated) and step < max_steps:
+            # Convert observation to tensor and get action from policy
             obs_tensor = torch.as_tensor(obs, device=device).float().unsqueeze(0)
-            with torch.no_grad():
+
+            with torch.no_grad():  # No need to track gradients during inference
                 logits, _ = actor(obs_tensor)
                 act = logits[0].cpu().numpy()
 
-                # Ensure action shape is correct
-                if len(act.shape) > 1:
-                    act = act.flatten()
+            # Process action to ensure correct format
+            if len(act.shape) > 1:  # Handle case where action is a 2D array
+                act = act.flatten()
 
-                # Ensure actions are within action space bounds
-                act = np.clip(act, env.action_space.low, env.action_space.high)
+            # Ensure actions are within environment's action space bounds
+            act = np.clip(act, env.action_space.low, env.action_space.high)
 
-            # Execute action
+            # Execute action in environment
             obs_next, rew, done, truncated, info = env.step(act)
             episode_reward += rew
 
-            # Record trajectory
+            # Store transition for potential further analysis
             trajectory.append((obs, act, rew, obs_next))
 
-            # Render and save frame
+            # Render environment and process frame
             frame = env.render()
-            if isinstance(frame, list):
+            if isinstance(frame, list):  # Handle case where render returns a list of frames
                 frame = frame[0]
 
-            # Increase resolution
+            # Increase resolution for better visualization
             h, w, c = frame.shape
-            frame = cv2.resize(frame, (w * resolution_scale, h * resolution_scale), interpolation=cv2.INTER_CUBIC)
+            frame = cv2.resize(frame, (w * resolution_scale, h * resolution_scale),
+                              interpolation=cv2.INTER_CUBIC)
 
-            # Add information text
-            cv2.putText(frame, f"Episode: {episode+1}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7 * resolution_scale, (0, 0, 255), 2)
-            cv2.putText(frame, f"Step: {step}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7 * resolution_scale, (0, 0, 255), 2)
-            cv2.putText(frame, f"Reward: {rew:.4f}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7 * resolution_scale, (0, 0, 255), 2)
-            cv2.putText(frame, f"Total Reward: {episode_reward:.4f}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7 * resolution_scale, (0, 0, 255), 2)
+            # Add informative text overlays
+            # Episode and step information (red text)
+            text_color = (0, 0, 255)  # BGR format (red)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.7 * resolution_scale
+            thickness = 2
+            cv2.putText(frame, f"Episode: {episode+1}", (10, 30), font, font_scale, text_color, thickness)
+            cv2.putText(frame, f"Step: {step}", (10, 60), font, font_scale, text_color, thickness)
 
-            # Add action information
+            # Reward information
+            cv2.putText(frame, f"Reward: {rew:.4f}", (10, 90), font, font_scale, text_color, thickness)
+            cv2.putText(frame, f"Total Reward: {episode_reward:.4f}", (10, 120), font, font_scale, text_color, thickness)
+
+            # Action information (green text)
+            action_color = (0, 255, 0)  # BGR format (green)
+            action_font_scale = 0.6 * resolution_scale
             for i, a in enumerate(act):
-                cv2.putText(frame, f"Action {i+1}: {a:.4f}", (10, 150 + i * 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6 * resolution_scale, (0, 255, 0), 2)
+                cv2.putText(frame, f"Action {i+1}: {a:.4f}", (10, 150 + i * 30), font,
+                           action_font_scale, action_color, thickness)
 
-            # Convert color space
+            # Convert color space for video writing (RGB to BGR)
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             frames.append(frame)
 
-            # Update observation
+            # Update for next step
             obs = obs_next
             step += 1
 
-        # Determine if successful
-        if episode_reward > -10:  # Judge success based on reward
+        # Determine if episode was successful based on reward threshold
+        if episode_reward > success_threshold:
             success_count += 1
 
+        # Record and display episode results
         total_rewards.append(episode_reward)
         print(f"Episode {episode+1} reward: {episode_reward:.4f}, Steps: {step}")
 
-        # Save video
+        # Save video if frames were collected
         if frames:
             video_path = os.path.join(video_dir, f"episode_{episode+1}.mp4")
+
+            # Get dimensions from the first frame
             height, width, _ = frames[0].shape
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+
+            # Create video writer
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # MP4 codec
             video = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
 
+            # Write all frames to video
             for frame in frames:
                 video.write(frame)
 
+            # Release resources
             video.release()
             print(f"Video saved to {video_path}")
 
+    # Calculate and display overall performance
     success_rate = success_count / num_episodes * 100
     print(f"Success rate: {success_rate:.2f}%")
+    print(f"Average reward: {np.mean(total_rewards):.4f} ± {np.std(total_rewards):.4f}")
 
     return total_rewards, success_rate
 
-def collect_data(env, actor, num_episodes=100, device='cpu'):
-    """Collect data for visualization"""
+def collect_data(env, actor, num_episodes=100, device='cpu', max_steps=50, success_threshold=-10):
+    """
+    Collect data from agent-environment interactions for visualization and analysis.
+
+    This function runs the trained agent in the environment for multiple episodes,
+    collecting observations, actions, rewards, and transitions for later analysis.
+
+    Args:
+        env (gym.Env): The environment to run the agent in
+        actor (torch.nn.Module): The trained actor network that outputs actions
+        num_episodes (int): Number of episodes to collect data from
+        device (str): Device to run the model on ('cpu' or 'cuda')
+        max_steps (int): Maximum number of steps per episode
+        success_threshold (float): Reward threshold above which an episode is considered successful
+
+    Returns:
+        tuple: (observations, actions, rewards, next_observations, episode_rewards, success_rate)
+            - observations (np.ndarray): Array of observations
+            - actions (np.ndarray): Array of actions taken
+            - rewards (np.ndarray): Array of rewards received
+            - next_observations (np.ndarray): Array of next observations
+            - episode_rewards (np.ndarray): Array of total rewards for each episode
+            - success_rate (float): Percentage of successful episodes
+    """
     print("\n=== Collecting Data for Visualization ===")
+
+    # Initialize data collection arrays
     all_observations = []
     all_actions = []
     all_rewards = []
@@ -126,81 +198,180 @@ def collect_data(env, actor, num_episodes=100, device='cpu'):
     episode_rewards = []
     success_count = 0
 
+    # Process each episode with progress bar
     for episode in tqdm(range(num_episodes), desc="Collecting data"):
+        # Reset environment
         obs, _ = env.reset()
         done = False
         truncated = False
         episode_reward = 0
         step = 0
 
-        while not (done or truncated) and step < 50:
-            # Get action
+        # Run episode
+        while not (done or truncated) and step < max_steps:
+            # Convert observation to tensor and get action from policy
             obs_tensor = torch.as_tensor(obs, device=device).float().unsqueeze(0)
-            with torch.no_grad():
+
+            with torch.no_grad():  # No need to track gradients during inference
                 logits, _ = actor(obs_tensor)
                 act = logits[0].cpu().numpy()
 
-                # Ensure action shape is correct
-                if len(act.shape) > 1:
-                    act = act.flatten()
+            # Process action to ensure correct format
+            if len(act.shape) > 1:  # Handle case where action is a 2D array
+                act = act.flatten()
 
-                # Ensure actions are within action space bounds
-                act = np.clip(act, env.action_space.low, env.action_space.high)
+            # Ensure actions are within environment's action space bounds
+            act = np.clip(act, env.action_space.low, env.action_space.high)
 
-            # Execute action
+            # Execute action in environment
             obs_next, rew, done, truncated, info = env.step(act)
             episode_reward += rew
 
-            # Record data
+            # Store transition data for analysis
             all_observations.append(obs)
             all_actions.append(act)
             all_rewards.append(rew)
             all_next_observations.append(obs_next)
 
-            # Update observation
+            # Update for next step
             obs = obs_next
             step += 1
 
+        # Record episode total reward
         episode_rewards.append(episode_reward)
 
-        # Determine if successful
-        if episode_reward > -10:  # Judge success based on reward
+        # Determine if episode was successful based on reward threshold
+        if episode_reward > success_threshold:
             success_count += 1
 
+    # Calculate and display overall performance
     success_rate = success_count / num_episodes * 100
     print(f"Success rate: {success_rate:.2f}%")
+    print(f"Average reward: {np.mean(episode_rewards):.4f} ± {np.std(episode_rewards):.4f}")
+    print(f"Total transitions collected: {len(all_observations)}")
 
+    # Convert lists to numpy arrays for easier analysis
     return (np.array(all_observations), np.array(all_actions), np.array(all_rewards),
             np.array(all_next_observations), np.array(episode_rewards), success_rate)
 
 def plot_reward_distribution(episode_rewards, viz_dir):
-    """Plot reward distribution"""
+    """
+    Plot the distribution of episode rewards.
+
+    This function creates a histogram with kernel density estimation to visualize
+    the distribution of total rewards across episodes, providing insights into
+    the agent's performance consistency.
+
+    Args:
+        episode_rewards (np.ndarray or list): Array of total rewards from each episode
+        viz_dir (str): Directory to save the visualization
+
+    Returns:
+        None: The function saves the plot to disk but doesn't return any value
+    """
     print("\n=== Plotting Reward Distribution ===")
+
+    # Create figure with appropriate size
     plt.figure(figsize=(10, 6))
-    sns.histplot(episode_rewards, kde=True)
-    plt.title('Reward Distribution')
-    plt.xlabel('Total Reward')
-    plt.ylabel('Frequency')
-    plt.grid(True, alpha=0.3)
-    plt.savefig(os.path.join(viz_dir, 'reward_distribution.png'))
-    print(f"Reward distribution plot saved to {os.path.join(viz_dir, 'reward_distribution.png')}")
+
+    # Plot histogram with kernel density estimation
+    sns.histplot(episode_rewards, kde=True, color='blue', alpha=0.7)
+
+    # Add statistical information as text
+    stats_text = f"Mean: {np.mean(episode_rewards):.2f}\nStd: {np.std(episode_rewards):.2f}"
+    stats_text += f"\nMin: {np.min(episode_rewards):.2f}\nMax: {np.max(episode_rewards):.2f}"
+    stats_text += f"\nMedian: {np.median(episode_rewards):.2f}"
+
+    # Position text in the upper right corner
+    plt.text(0.95, 0.95, stats_text, transform=plt.gca().transAxes,
+             verticalalignment='top', horizontalalignment='right',
+             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    # Add labels and title
+    plt.title('Reward Distribution', fontsize=14, fontweight='bold')
+    plt.xlabel('Total Episode Reward', fontsize=12)
+    plt.ylabel('Frequency', fontsize=12)
+
+    # Add grid for better readability
+    plt.grid(True, alpha=0.3, linestyle='--')
+
+    # Ensure layout is tight
+    plt.tight_layout()
+
+    # Save figure
+    output_path = os.path.join(viz_dir, 'reward_distribution.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()  # Close the figure to free memory
+
+    print(f"Reward distribution plot saved to {output_path}")
 
 def plot_action_distribution(actions, action_shape, viz_dir):
-    """Plot action distribution"""
+    """
+    Plot the distribution of actions across each action dimension.
+
+    This function creates a grid of histograms showing the distribution of actions
+    taken by the agent in each dimension of the action space. This helps analyze
+    the agent's action preferences and biases.
+
+    Args:
+        actions (np.ndarray): Array of actions taken by the agent, shape (n_steps, action_dim)
+        action_shape (tuple): Shape of the action space
+        viz_dir (str): Directory to save the visualization
+
+    Returns:
+        None: The function saves the plot to disk but doesn't return any value
+    """
     print("\n=== Plotting Action Distribution ===")
+
+    # Create a grid of subplots
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
 
+    # Plot distribution for each action dimension
     for i in range(action_shape[0]):
-        sns.histplot(actions[:, i], kde=True, ax=axes[i])
-        axes[i].set_title(f'Action Dimension {i+1} Distribution')
-        axes[i].set_xlabel('Action Value')
-        axes[i].set_ylabel('Frequency')
-        axes[i].grid(True, alpha=0.3)
+        # Extract actions for this dimension
+        dimension_actions = actions[:, i]
 
+        # Plot histogram with kernel density estimation
+        sns.histplot(dimension_actions, kde=True, ax=axes[i], color=f'C{i}', alpha=0.7)
+
+        # Add statistical information
+        stats_text = f"Mean: {np.mean(dimension_actions):.3f}\nStd: {np.std(dimension_actions):.3f}"
+        stats_text += f"\nMin: {np.min(dimension_actions):.3f}\nMax: {np.max(dimension_actions):.3f}"
+
+        # Add text box with statistics
+        axes[i].text(0.95, 0.95, stats_text, transform=axes[i].transAxes,
+                    verticalalignment='top', horizontalalignment='right',
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+        # Set titles and labels
+        axes[i].set_title(f'Action Dimension {i+1} Distribution', fontsize=12, fontweight='bold')
+        axes[i].set_xlabel('Action Value', fontsize=10)
+        axes[i].set_ylabel('Frequency', fontsize=10)
+
+        # Add grid for better readability
+        axes[i].grid(True, alpha=0.3, linestyle='--')
+
+        # Add vertical line at zero for reference
+        axes[i].axvline(x=0, color='red', linestyle='--', alpha=0.5)
+
+    # Hide any unused subplots
+    for i in range(action_shape[0], len(axes)):
+        axes[i].set_visible(False)
+
+    # Add overall title
+    fig.suptitle('Action Distributions by Dimension', fontsize=16, fontweight='bold', y=0.98)
+
+    # Ensure layout is tight
     plt.tight_layout()
-    plt.savefig(os.path.join(viz_dir, 'action_distribution.png'))
-    print(f"Action distribution plot saved to {os.path.join(viz_dir, 'action_distribution.png')}")
+    plt.subplots_adjust(top=0.92)  # Adjust for the suptitle
+
+    # Save figure
+    output_path = os.path.join(viz_dir, 'action_distribution.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()  # Close the figure to free memory
+
+    print(f"Action distribution plot saved to {output_path}")
 
     # Plot action correlation heatmap
     plt.figure(figsize=(8, 6))
@@ -251,41 +422,187 @@ def plot_state_space(observations, viz_dir):
         print(f"t-SNE visualization failed: {e}")
 
 def plot_reward_action_relationship(actions, rewards, action_shape, viz_dir):
-    """Plot reward-action relationship"""
+    """
+    Plot the relationship between actions and rewards.
+
+    This function creates scatter plots showing how different action dimensions
+    correlate with received rewards. It helps identify which action dimensions
+    have the strongest impact on performance and the optimal action values.
+
+    Args:
+        actions (np.ndarray): Array of actions taken by the agent, shape (n_steps, action_dim)
+        rewards (np.ndarray): Array of rewards received, shape (n_steps,)
+        action_shape (tuple): Shape of the action space
+        viz_dir (str): Directory to save the visualization
+
+    Returns:
+        None: The function saves the plot to disk but doesn't return any value
+    """
     print("\n=== Plotting Reward-Action Relationship ===")
+
+    # Create a grid of subplots
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
 
+    # Plot relationship for each action dimension
     for i in range(action_shape[0]):
-        axes[i].scatter(actions[:, i], rewards, alpha=0.3, s=5)
-        axes[i].set_title(f'Action Dimension {i+1} vs Reward')
-        axes[i].set_xlabel(f'Action {i+1}')
-        axes[i].set_ylabel('Reward')
-        axes[i].grid(True, alpha=0.3)
+        # Extract actions for this dimension
+        dimension_actions = actions[:, i]
 
+        # Create scatter plot
+        scatter = axes[i].scatter(dimension_actions, rewards, alpha=0.5, s=10, c=rewards,
+                                 cmap='viridis', edgecolor='none')
+
+        # Add trend line using polynomial fit
+        z = np.polyfit(dimension_actions, rewards, 1)
+        p = np.poly1d(z)
+        x_sorted = np.sort(dimension_actions)
+        axes[i].plot(x_sorted, p(x_sorted), "r--", alpha=0.8, linewidth=2)
+
+        # Add correlation coefficient
+        correlation = np.corrcoef(dimension_actions, rewards)[0, 1]
+        corr_text = f"Correlation: {correlation:.3f}"
+        slope_text = f"Slope: {z[0]:.3f}"
+
+        # Add text box with correlation information
+        axes[i].text(0.05, 0.95, corr_text + '\n' + slope_text, transform=axes[i].transAxes,
+                    verticalalignment='top', horizontalalignment='left',
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+        # Set titles and labels
+        axes[i].set_title(f'Reward vs Action Dimension {i+1}', fontsize=12, fontweight='bold')
+        axes[i].set_xlabel(f'Action {i+1} Value', fontsize=10)
+        axes[i].set_ylabel('Reward', fontsize=10)
+
+        # Add grid for better readability
+        axes[i].grid(True, alpha=0.3, linestyle='--')
+
+        # Add vertical line at zero for reference
+        axes[i].axvline(x=0, color='black', linestyle='--', alpha=0.3)
+
+        # Add horizontal line at zero reward for reference
+        axes[i].axhline(y=0, color='black', linestyle='--', alpha=0.3)
+
+    # Hide any unused subplots
+    for i in range(action_shape[0], len(axes)):
+        axes[i].set_visible(False)
+
+    # Add colorbar
+    if action_shape[0] > 0:  # Only add if we have at least one plot
+        cbar = fig.colorbar(scatter, ax=axes, orientation='vertical', pad=0.01)
+        cbar.set_label('Reward Value', fontsize=10)
+
+    # Add overall title
+    fig.suptitle('Relationship Between Actions and Rewards', fontsize=16, fontweight='bold', y=0.98)
+
+    # Ensure layout is tight
     plt.tight_layout()
-    plt.savefig(os.path.join(viz_dir, 'reward_action_relationship.png'))
-    print(f"Reward-action relationship plot saved to {os.path.join(viz_dir, 'reward_action_relationship.png')}")
+    plt.subplots_adjust(top=0.92)  # Adjust for the suptitle
+
+    # Save figure
+    output_path = os.path.join(viz_dir, 'reward_action_relationship.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()  # Close the figure to free memory
+
+    print(f"Reward-action relationship plot saved to {output_path}")
 
 def plot_success_rate(success_rate, viz_dir):
-    """Plot success rate statistics"""
+    """
+    Plot the success rate statistics of the agent.
+
+    This function creates a bar chart showing the success and failure rates
+    of the agent on the task, providing a clear visualization of the agent's
+    overall performance.
+
+    Args:
+        success_rate (float): The success rate as a percentage (0-100)
+        viz_dir (str): Directory to save the visualization
+
+    Returns:
+        None: The function saves the plot to disk but doesn't return any value
+    """
     print("\n=== Plotting Success Rate Statistics ===")
-    plt.figure(figsize=(8, 6))
-    plt.bar(['Success', 'Failure'], [success_rate, 100 - success_rate])
-    plt.title('Task Success Rate Statistics')
-    plt.ylabel('Percentage (%)')
-    plt.ylim(0, 100)
 
-    # Add value labels
-    plt.text(0, success_rate + 2, f'{success_rate:.1f}%', ha='center')
-    plt.text(1, 100 - success_rate + 2, f'{100 - success_rate:.1f}%', ha='center')
+    # Create figure with appropriate size
+    plt.figure(figsize=(10, 6))
 
-    plt.savefig(os.path.join(viz_dir, 'success_rate.png'))
-    print(f"Success rate statistics plot saved to {os.path.join(viz_dir, 'success_rate.png')}")
+    # Define colors for success and failure
+    colors = ['#2ecc71', '#e74c3c']  # Green for success, red for failure
+
+    # Create bar chart
+    bars = plt.bar(['Success', 'Failure'], [success_rate, 100 - success_rate], color=colors, alpha=0.8)
+
+    # Add title and labels
+    plt.title('Task Success Rate Statistics', fontsize=16, fontweight='bold')
+    plt.ylabel('Percentage (%)', fontsize=12)
+    plt.ylim(0, 110)  # Leave room for labels above bars
+
+    # Add value labels above bars
+    for i, bar in enumerate(bars):
+        height = bar.get_height()
+        value = success_rate if i == 0 else 100 - success_rate
+        plt.text(bar.get_x() + bar.get_width()/2, height + 3,
+                f"{value:.1f}%", ha='center', va='bottom', fontsize=12, fontweight='bold')
+
+    # Add horizontal line at 50% for reference
+    plt.axhline(y=50, color='black', linestyle='--', alpha=0.3)
+
+    # Add grid for better readability
+    plt.grid(True, alpha=0.3, axis='y', linestyle='--')
+
+    # Add a text box with interpretation
+    if success_rate >= 90:
+        interpretation = "Excellent performance!"
+    elif success_rate >= 70:
+        interpretation = "Good performance"
+    elif success_rate >= 50:
+        interpretation = "Moderate performance"
+    else:
+        interpretation = "Needs improvement"
+
+    plt.text(0.5, 0.05, interpretation, transform=plt.gca().transAxes,
+             ha='center', va='bottom', fontsize=14,
+             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    # Ensure layout is tight
+    plt.tight_layout()
+
+    # Save figure
+    output_path = os.path.join(viz_dir, 'success_rate.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()  # Close the figure to free memory
+
+    print(f"Success rate statistics plot saved to {output_path}")
 
 def create_visualization_html(video_rewards, success_rate, viz_dir):
-    """Create HTML page to display all visualization results"""
+    """
+    Create an HTML page to display all visualization results in an organized manner.
+
+    This function generates a comprehensive HTML report that includes all the
+    visualizations, performance metrics, and video samples in a well-structured
+    format for easy viewing and analysis.
+
+    Args:
+        video_rewards (list): List of rewards from the video generation episodes
+        success_rate (float): The success rate as a percentage (0-100)
+        viz_dir (str): Directory containing the visualization results
+
+    Returns:
+        str: Path to the generated HTML file
+    """
     print("\n=== Creating Visualization Results HTML Page ===")
+
+    # Calculate additional statistics for the report
+    avg_reward = np.mean(video_rewards)
+    std_reward = np.std(video_rewards)
+    min_reward = np.min(video_rewards)
+    max_reward = np.max(video_rewards)
+    median_reward = np.median(video_rewards)
+
+    # Get current timestamp for the report
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+    # Create HTML content with improved styling and organization
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -340,35 +657,77 @@ def create_visualization_html(video_rewards, success_rate, viz_dir):
             border-radius: 5px;
         }}
         .stats {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
             background-color: #f9f9f9;
             padding: 15px;
             border-radius: 5px;
             margin-bottom: 20px;
         }}
+        .stat-card {{
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }}
+        .stat-value {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c7be5;
+            margin: 10px 0;
+        }}
+        .stat-label {{
+            color: #6c757d;
+            font-size: 14px;
+            text-transform: uppercase;
+        }}
         .highlight {{
             color: #2c7be5;
             font-weight: bold;
         }}
+        footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+        }}
     </style>
 </head>
 <body>
-    <h1>FetchReach SAC Extended Visualizations</h1>
+    <h1>FetchReach Reinforcement Learning Visualizations</h1>
+    <p>Generated on {timestamp}</p>
 
     <div class="section">
-        <h2>Overview</h2>
-        <p>This page presents extended visualizations of the SAC algorithm in the FetchReach-v1 environment.</p>
+        <h2>Performance Overview</h2>
+        <p>This page presents comprehensive visualizations of the reinforcement learning algorithm in the FetchReach-v1 environment.</p>
 
         <div class="stats">
-            <h3>Performance Statistics</h3>
-            <p><span class="highlight">Average Reward:</span> {np.mean(video_rewards):.4f}</p>
-            <p><span class="highlight">Reward Range:</span> [{np.min(video_rewards):.4f}, {np.max(video_rewards):.4f}]</p>
-            <p><span class="highlight">Success Rate:</span> {success_rate:.2f}%</p>
+            <div class="stat-card">
+                <div class="stat-label">Success Rate</div>
+                <div class="stat-value">{success_rate:.1f}%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Average Reward</div>
+                <div class="stat-value">{avg_reward:.2f}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Median Reward</div>
+                <div class="stat-value">{median_reward:.2f}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Reward Range</div>
+                <div class="stat-value">[{min_reward:.2f}, {max_reward:.2f}]</div>
+            </div>
         </div>
     </div>
 
     <div class="section">
         <h2>Video Samples</h2>
-        <p>Here are 10 video samples of the trained agent performing the task:</p>
+        <p>Below are video samples of the trained agent performing the task:</p>
 
         <div class="video-grid">
 """
@@ -453,12 +812,30 @@ def create_visualization_html(video_rewards, success_rate, viz_dir):
     print(f"HTML page saved to {os.path.join(viz_dir, 'index.html')}")
 
 def main(args):
+    """
+    Main function to run the visualization process.
 
-    # Set result directory
+    This function coordinates the entire visualization workflow, including:
+    1. Setting up the environment and loading the trained model
+    2. Generating video samples of the agent's behavior
+    3. Collecting data for analysis
+    4. Creating various visualizations
+    5. Generating an HTML report
+
+    Args:
+        args: Command-line arguments containing configuration parameters
+
+    Returns:
+        None
+    """
+    print("\n=== Starting Visualization Process ===")
+
+    # Set up directories
     log_dir = args.log_dir
-    model_path = args.model_file  # Use the full path directly
+    model_path = args.model_file
     viz_dir = os.path.join(log_dir, "visualizations")
     os.makedirs(viz_dir, exist_ok=True)
+    print(f"Visualization results will be saved to: {viz_dir}")
 
     # Environment settings
     env_id = args.env_id
@@ -466,13 +843,14 @@ def main(args):
     seed = args.seed
     device = args.device
 
-    # Create environment
+    # Create environment with rendering capability
+    print(f"\nSetting up environment: {env_id}")
     env = gym.make(env_id, render_mode='rgb_array')
     env = FilterObservation(env, filter_keys=observation_keys)
     env = FlattenObservation(env)
     env.reset(seed=seed)
 
-    # Get environment information
+    # Display environment information
     print(f"Observation space: {env.observation_space}")
     print(f"Action space: {env.action_space}")
     print(f"Action shape: {env.action_space.shape}")
